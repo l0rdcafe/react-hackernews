@@ -1,0 +1,101 @@
+:
+import React, { Component } from "react";
+import axios from "axios";
+import Table from "./table";
+import Search from "./search";
+import Button from "./button";
+import "./App.css";
+
+const DEFAULT_QUERY = "javascript";
+const DEFAULT_HPP = "100";
+const PATH_BASE = "https://hn.algolia.com/api/v1";
+const PATH_SEARCH = "/search";
+const PARAM_SEARCH = "query=";
+const PARAM_PAGE = "page=";
+const PARAM_HPP = "hitsPerPage=";
+
+class App extends Component {
+  constructor(props) {
+    super(props);
+
+    this.state = {
+      results: null,
+      searchKey: "",
+      searchQuery: DEFAULT_QUERY,
+      error: null
+    };
+  }
+  componentDidMount() {
+    this.isMounted = true;
+    const { searchQuery } = this.state;
+    this.setState({ searchKey: searchQuery });
+    this.fetchTopStories(searchQuery);
+  }
+  componentWillUnmount() {
+    this.isMounted = false;
+  }
+  onSearchChange = e => {
+    this.setState({ searchQuery: e.target.value });
+  };
+  onSearchSubmit = e => {
+    const { searchQuery } = this.state;
+    this.setState({ searchKey: searchQuery });
+
+    if (this.needsToSearchStories(searchQuery)) {
+      this.fetchTopStories(searchQuery);
+    }
+
+    e.preventDefault();
+  };
+  onDismiss = id => {
+    const { searchKey, results } = this.state;
+    const { hits, page } = results[searchKey];
+    const newList = hits.filter(item => item.objectID !== id);
+
+    this.setState({ results: { ...results, [searchKey]: { hits: newList, page } } });
+  };
+  setSearchResult = result => {
+    const { hits, page } = result;
+    const { searchKey, results } = this.state;
+    const oldHits = results && results[searchKey] ? results[searchKey].hits : [];
+    const newHits = [...oldHits, ...hits];
+
+    this.setState({ results: { ...results, [searchKey]: { hits: newHits, page } } });
+  };
+  needsToSearchStories = query => (this.state.results ? !this.state.results[query] : true);
+  isMounted = false;
+  fetchTopStories = (query, page = 0) => {
+    const url = `${PATH_BASE}${PATH_SEARCH}?${PARAM_SEARCH}${query}&${PARAM_PAGE}${page}&${PARAM_HPP}${DEFAULT_HPP}`;
+
+    axios(url)
+      .then(res => this.isMounted && this.setSearchResult(res.data))
+      .catch(error => this.isMounted && this.setState({ error }));
+  };
+  render() {
+    const { results, searchQuery, searchKey, error } = this.state;
+    const page = (results && results[searchKey] && results[searchKey].page) || 0;
+    const list = (results && results[searchKey] && results[searchKey].hits) || [];
+
+    return (
+      <div className="page">
+        <div className="interactions">
+          <Search value={searchQuery} onChange={this.onSearchChange} onSubmit={this.onSearchSubmit}>
+            Search
+          </Search>
+        </div>
+        {error ? (
+          <div className="interactions">
+            <p>Something went wrong.</p>
+          </div>
+        ) : (
+          <Table list={list} onDismiss={this.onDismiss} />
+        )}
+        <div className="interactions">
+          <Button onClick={() => this.fetchTopStories(searchKey, page + 1)}>More</Button>
+        </div>
+      </div>
+    );
+  }
+}
+
+export default App;
